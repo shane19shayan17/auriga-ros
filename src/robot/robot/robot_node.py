@@ -3,6 +3,9 @@ from rclpy.node import Node
 
 from interface.msg import Robot
 from interface.srv import FoodReady
+from nav_msgs.msg import OccupancyGrid
+
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 import time
 
@@ -27,6 +30,19 @@ class RobotNode(Node):
             "food_ready",
             self.food_recieve_callback
         )
+        
+        map_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.map_subscriber_ = self.create_subscription(
+            OccupancyGrid,
+            "/map",
+            self.map_callback,
+            map_qos
+        )
+        self.grid_ = []
 
     def timer_callback(self):
         msg = Robot()
@@ -50,6 +66,29 @@ class RobotNode(Node):
     def food_recieve_callback(self, request, response):
         self.get_logger().info(f"order {request.name} was delivered !")
         return response
+    
+    def map_callback(self, grid_map : OccupancyGrid):
+        width = grid_map.info.width
+        height = grid_map.info.height
+        
+        for y in range(height):
+            for x in range(width):
+                self.grid_[y][x] = grid_map.data[y * width + x]
+        self.get_logger().info(
+            f'Got map {width}x{height}, resolution {grid_map.info.resolution:.2f} m/cell')
+        self.print_grid(self.grid_)
+    
+    def print_grid(self, grid : list):
+        for row in grid:
+            line = ''
+            for cell in row:
+                if cell > 0:
+                    line += '#'
+                elif cell == 0:
+                    line += '.'
+                else:
+                    line += '?'
+            self.get_logger().info(line)
 
 def main(args=None):
     rclpy.init(args=args)
