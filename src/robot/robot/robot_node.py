@@ -4,20 +4,29 @@ from rclpy.node import Node
 from interface.msg import Robot
 from interface.srv import FoodReady
 from nav_msgs.msg import OccupancyGrid, Odometry
+from rclpy.impl.rcutils_logger import RcutilsLogger
 
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 import time
 
 class Robothandler():
-    def __init__(self, logger):
+    def __init__(self, logger: RcutilsLogger):
         self.kitchen_odom = Odometry()
-        self.logger = logger
         
+        # initial state of robot
+        self.robot_odom = Odometry()
+        self.robot_odom.pose.pose.position.x = 2.0
+        self.robot_odom.pose.pose.position.y = 2.0
+        self.robot_odom.pose.pose.orientation.w = 1.0
+        
+        self.logger = logger
     
     def set_kitchen_odom(self, position : Odometry):
         self.kitchen_odom = position
-        self.logger.info(f'{position.pose.pose.position.x}, {position.pose.pose.position.y}')
+    
+    def get_robot_odom(self) -> Odometry:
+        return self.robot_odom
 
 class RobotNode(Node):
 
@@ -67,7 +76,6 @@ class RobotNode(Node):
             keep_last_qos,
         )
         
-        
         self.grid_ = []
         self.robotHandler = Robothandler(self.get_logger())
         
@@ -79,6 +87,7 @@ class RobotNode(Node):
         msg.robot_state = self.robot_state_
         self.publisher_.publish(msg)
         
+        self.odom_ = self.robotHandler.get_robot_odom()
         self.odometry_publisher_.publish(self.odom_)
     
     def kitchen_position_callback(self, msg : Odometry):
