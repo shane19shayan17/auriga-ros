@@ -16,7 +16,7 @@ class MapLoaderNode(Node):
         
         qos_setting = QoSProfile(
             depth=1,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
         self.map_publisher_ = self.create_publisher(

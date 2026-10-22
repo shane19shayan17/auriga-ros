@@ -5,7 +5,7 @@ from interface.msg import Robot
 from interface.srv import FoodReady
 from nav_msgs.msg import OccupancyGrid
 
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 import time
 
@@ -33,7 +33,7 @@ class RobotNode(Node):
         
         map_qos = QoSProfile(
             depth=1,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
         self.map_subscriber_ = self.create_subscription(
@@ -43,6 +43,7 @@ class RobotNode(Node):
             map_qos
         )
         self.grid_ = []
+        self.get_logger().info(f'Robot node started !')
 
     def timer_callback(self):
         msg = Robot()
@@ -71,11 +72,11 @@ class RobotNode(Node):
         width = grid_map.info.width
         height = grid_map.info.height
         
+        self.grid_ = [[-1] * width for _ in range(height)]
+        
         for y in range(height):
             for x in range(width):
                 self.grid_[y][x] = grid_map.data[y * width + x]
-        self.get_logger().info(
-            f'Got map {width}x{height}, resolution {grid_map.info.resolution:.2f} m/cell')
         self.print_grid(self.grid_)
     
     def print_grid(self, grid : list):
