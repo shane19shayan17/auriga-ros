@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(interface REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 
 add_executable(kitchen
@@ -21,6 +22,7 @@ ament_target_dependencies(kitchen
   rclcpp
   interface
   std_srvs
+  nav_msgs
 )
 
 install(TARGETS

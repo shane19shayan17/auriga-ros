@@ -3,6 +3,7 @@
 #include "interface/srv/order.hpp"
 #include "interface/srv/food_ready.hpp"
 #include "std_srvs/srv/empty.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 
 #include <memory>
 #include <string>
@@ -11,12 +12,18 @@
 #include "../include/kitchen/Logger.hpp"
 #include "../include/kitchen/Menu.hpp"
 
+using Odometry = nav_msgs::msg::Odometry;
+
 class KithcenHandler
 {
 public:
     KithcenHandler(int period_ms)
         : period_second_(period_ms / 1000.0)
     {
+        kitchen_odom_.header.frame_id = "baase_link";
+        kitchen_odom_.pose.pose.position.x = 0;
+        kitchen_odom_.pose.pose.position.y = 0;
+        kitchen_odom_.pose.pose.orientation.w = 1;
     }
 
     struct OrderInfo
@@ -114,6 +121,11 @@ public:
         return is_close;
     }
 
+    Odometry get_kitchen_odometry()
+    {
+        return kitchen_odom_;
+    }
+
 private:
     std::string robot_state_;
 
@@ -124,6 +136,8 @@ private:
     OrderInfo ready_food_info;
 
     bool is_close = false;
+
+    Odometry kitchen_odom_ = Odometry();
 };
 
 using std::placeholders::_1;
@@ -160,6 +174,13 @@ public:
 
         closing_client_ = this->create_client<Empty>(
             "closing");
+
+        auto keep_last_qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local();
+        kitchen_position_publisher_ = this->create_publisher<Odometry>(
+            "/kitchen_position",
+            keep_last_qos);
+
+        kitchen_position_publisher_->publish(kithcenHandler.get_kitchen_odometry());
     }
 
 private:
@@ -223,6 +244,7 @@ private:
     rclcpp::Client<FoodReady>::SharedPtr food_ready_client_;
     rclcpp::Client<Empty>::SharedPtr closing_client_;
     rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Publisher<Odometry>::SharedPtr kitchen_position_publisher_;
     int timer_period_ms = 200;
 
     // main controller for kitchen

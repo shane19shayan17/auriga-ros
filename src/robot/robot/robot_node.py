@@ -3,11 +3,21 @@ from rclpy.node import Node
 
 from interface.msg import Robot
 from interface.srv import FoodReady
-from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import OccupancyGrid, Odometry
 
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 import time
+
+class Robothandler():
+    def __init__(self, logger):
+        self.kitchen_odom = Odometry()
+        self.logger = logger
+        
+    
+    def set_kitchen_odom(self, position : Odometry):
+        self.kitchen_odom = position
+        self.logger.info(f'{position.pose.pose.position.x}, {position.pose.pose.position.y}')
 
 class RobotNode(Node):
 
@@ -31,7 +41,7 @@ class RobotNode(Node):
             self.food_recieve_callback
         )
         
-        map_qos = QoSProfile(
+        keep_last_qos = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -40,9 +50,27 @@ class RobotNode(Node):
             OccupancyGrid,
             "/map",
             self.map_callback,
-            map_qos
+            keep_last_qos
         )
+        
+        self.odom_ = Odometry()
+        self.odometry_publisher_ = self.create_publisher(
+            Odometry,
+            "/robot_pose",
+            10,
+        )
+        
+        self.kitchen_position_subscriber_ = self.create_subscription(
+            Odometry,
+            "/kitchen_position",
+            self.kitchen_position_callback,
+            keep_last_qos,
+        )
+        
+        
         self.grid_ = []
+        self.robotHandler = Robothandler(self.get_logger())
+        
         self.get_logger().info(f'Robot node started !')
 
     def timer_callback(self):
@@ -50,6 +78,11 @@ class RobotNode(Node):
         self.robot_state_ = self.handle_robot_state()
         msg.robot_state = self.robot_state_
         self.publisher_.publish(msg)
+        
+        self.odometry_publisher_.publish(self.odom_)
+    
+    def kitchen_position_callback(self, msg : Odometry):
+        self.robotHandler.set_kitchen_odom(msg)
     
     def handle_robot_state(self) -> str:
         elapsed_time = time.time() - self.start_time_ 
