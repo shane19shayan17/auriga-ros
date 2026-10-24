@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 #include <deque>
+#include <cstdint>
 
 #include "../include/kitchen/Logger.hpp"
 #include "../include/kitchen/Menu.hpp"
@@ -28,7 +29,6 @@ public:
 
     struct OrderInfo
     {
-    public:
         OrderInfo() = default;
         OrderInfo(const Food &food_)
         {
@@ -40,6 +40,14 @@ public:
         bool is_ready;
         float remaining_time;
     };
+
+    enum State
+    {
+        FREE = 1,
+        COMMING_BACK = 2,
+        DELIVERING = 3,
+    };
+    
 
     void run()
     {
@@ -54,7 +62,7 @@ public:
             o.remaining_time -= period_second_;
         }
 
-        if (robot_state_ == "free")
+        if (robot_state_ == State::FREE)
         {
             for (size_t i = 0; i < orders.size(); i++)
             {
@@ -74,12 +82,12 @@ public:
         }
     }
 
-    void set_robot_state(std::string state)
+    void set_robot_state(int16_t state)
     {
         robot_state_ = state;
     }
 
-    std::string get_robot_state()
+    int16_t get_robot_state()
     {
         return robot_state_;
     }
@@ -127,7 +135,7 @@ public:
     }
 
 private:
-    std::string robot_state_;
+    int16_t robot_state_;
 
     std::deque<OrderInfo> orders = {};
     float period_second_;
@@ -157,7 +165,7 @@ public:
         robot_state_subscriber_ = this->create_subscription<Robot>(
             "robot_state",
             10,
-            std::bind(&KitchenNode::topic_callback, this, _1));
+            std::bind(&KitchenNode::robot_state_callback, this, _1));
 
         // order service
         order_service_ = this->create_service<Order>(
@@ -228,7 +236,7 @@ private:
             request);
     }
 
-    void topic_callback(const Robot::SharedPtr msg)
+    void robot_state_callback(const Robot::SharedPtr msg)
     {
         kithcenHandler.set_robot_state(msg->robot_state);
     }

@@ -1,1 +1,1 @@
-string robot_state
+int16 robot_state
