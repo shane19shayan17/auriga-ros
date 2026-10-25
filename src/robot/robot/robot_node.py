@@ -3,7 +3,7 @@ from rclpy.node import Node
 
 from interface.msg import Robot
 from interface.srv import FoodReady
-from nav_msgs.msg import OccupancyGrid, Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry, Path
 from rclpy.impl.rcutils_logger import RcutilsLogger
 
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
@@ -28,6 +28,8 @@ class Robothandler():
         self.logger = logger
         
         self.robot_state: State = State.FREE
+        
+        self.robot_path_: list[tuple] = []
     
     def set_kitchen_odom(self, position : Odometry):
         self.kitchen_odom = position
@@ -41,6 +43,9 @@ class Robothandler():
         else :
             self.robot_state = State.COMMING_BACK
         return self.robot_state.value[0]
+    
+    def set_robot_path(self, path: list[tuple]):
+        self.robot_path_ = path
 
 class RobotNode(Node):
 
@@ -87,6 +92,14 @@ class RobotNode(Node):
             keep_last_qos,
         )
         
+        # recieve path that navFn generated
+        self.path_subscriber_ = self.create_subscription(
+            Path,
+            "/plan",
+            self.path_callback,
+            10
+        )
+        
         self.grid_ = []
         self.robotHandler = Robothandler(self.get_logger())
         
@@ -119,7 +132,19 @@ class RobotNode(Node):
         self.print_grid(self.grid_)
     
     def print_grid(self, grid : list):
-        self.get_logger().info(grid)
+        self.get_logger().info(f'{grid}')
+
+    def path_callback(self, msg: Path):
+        path_lenght = len(msg.poses)
+        
+        # check wheaher the line is empty
+        if path_lenght < 0:
+            return
+        
+        path: list[tuple] = []
+        for pose in msg.poses:
+            path.append((pose.pose.position.x, pose.pose.position.y))
+        self.robotHandler.set_robot_path(path)
 
 def main(args=None):
     rclpy.init(args=args)
