@@ -10,6 +10,8 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Robot.msg"
+  "msg/Pose2D.msg"
+  "msg/Matrix2D.msg"
   "srv/Order.srv"
   "srv/FoodReady.srv"
 )

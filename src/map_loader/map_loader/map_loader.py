@@ -2,6 +2,15 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from interface.msg import Matrix2D, Pose2D
+import numpy as np
+from enum import Enum
+
+class MapContext(Enum):
+    FREE_SPACE = 0,
+    WALL = 1,
+    TABLE = 9,
+    ROBOT = 99,
 
 class MapLoaderNode(Node):
 
@@ -24,6 +33,13 @@ class MapLoaderNode(Node):
             "/map",
             qos_setting
         )
+        
+        self.tables_pose_publisher_ = self.create_publisher(
+            Matrix2D,
+            "tables_pose",
+            qos_setting
+        )
+        
         
         if(self.publishMapOnce()):
             self.get_logger().info(f'map loaded successfuly !')
@@ -65,6 +81,21 @@ class MapLoaderNode(Node):
         map_.data = data
 
         self.map_publisher_.publish(map_)
+        
+        # publish tables pose
+        tables_pose = Matrix2D()
+        
+        for i in range(len(rows)):
+            for j in range(len(rows[i])):
+                if int(rows[i][j]) == MapContext.TABLE.value[0]:
+                    pose = Pose2D()
+                    pose.x = i
+                    pose.y = j
+                    tables_pose.poses.append(pose)
+        
+        tables_pose.rows = len(tables_pose.poses)
+        self.tables_pose_publisher_.publish(tables_pose)
+        
         return True
 
 def main(args=None):

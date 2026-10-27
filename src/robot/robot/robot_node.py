@@ -9,11 +9,13 @@ from rclpy.impl.rcutils_logger import RcutilsLogger
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 from enum import Enum
+from collections import deque
 
 class State(Enum):
     FREE = 1,
     COMMING_BACK = 2,
-    DELIVERING = 3
+    DELIVERING = 3,
+    ORDERING = 4,
 
 class Robothandler():
     def __init__(self, logger: RcutilsLogger):
@@ -27,9 +29,10 @@ class Robothandler():
         
         self.logger = logger
         
-        self.robot_state: State = State.FREE
+        self.robot_state: State = State.COMMING_BACK
         
         self.robot_path_: list[tuple] = []
+        self.duties_: deque[list] = deque()
     
     def set_kitchen_odom(self, position : Odometry):
         self.kitchen_odom = position
@@ -37,16 +40,37 @@ class Robothandler():
     def get_robot_odom(self) -> Odometry:
         return self.robot_odom
     
-    def handle_robot_state(self) -> int:
-        if self.robot_odom.pose.pose.position.x == self.kitchen_odom.pose.pose.position.x and self.robot_odom.pose.pose.position.y == self.kitchen_odom.pose.pose.position.y :
-            self.robot_state = State.FREE
-        else :
-            self.robot_state = State.COMMING_BACK
+    def set_robot_state(self, state: State) -> None:
+        self.robot_state = state
+    
+    def get_robot_state(self) -> int:
         return self.robot_state.value[0]
+    
+    def handle_robot_state(self) -> None:
+        pass
+    
+    def get_robot_state(self) -> State:
+        return self.robot_state
     
     def set_robot_path(self, path: list[tuple]):
         self.robot_path_ = path
-
+    
+    def navigate(self):
+        # check wheater robot is navigating 
+        if self.robot_state != State.COMMING_BACK \
+            and self.robot_state != State.DELIVERING:             
+                return
+        
+        # check the path is generated
+        if self.robot_path_ == []:
+            self.logger.info(f'path was not generated !')
+            return
+        
+        self.robot_odom.pose.pose.position.x = self.robot_path_[0][0]
+        self.robot_odom.pose.pose.position.y = self.robot_path_[0][1]
+        self.logger.info(f'robot moved to ({self.robot_path_[0][0]}, {self.robot_path_[0][1]})')
+        self.robot_path_.pop(0)
+    
 class RobotNode(Node):
 
     def __init__(self):
@@ -107,8 +131,10 @@ class RobotNode(Node):
 
     def timer_callback(self):
         msg = Robot()
-        msg.robot_state = self.robotHandler.handle_robot_state()
+        msg.robot_state = self.robotHandler.get_robot_state()
         self.robot_state_publisher.publish(msg)
+        
+        self.robotHandler.navigate()
         
         self.odom_ = self.robotHandler.get_robot_odom()
         self.odometry_publisher_.publish(self.odom_)
@@ -117,6 +143,8 @@ class RobotNode(Node):
         self.robotHandler.set_kitchen_odom(msg)
 
     def food_recieve_callback(self, request, response):
+        if self.robotHandler.get_robot_state() == State.FREE:
+            pass
         self.get_logger().info(f"order {request.name} was delivered !")
         return response
     

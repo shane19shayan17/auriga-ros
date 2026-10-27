@@ -36,9 +36,11 @@ class MapVisualizer(Node):
                     10
                 )
         
-        self.cmap = ListedColormap(['#ffffff', "#691e89", "#2c671f"])
+        self.cmap = ListedColormap(['#ffffff', "#691e89", "#d60e9e", "#1325ce"])
         self.norm = BoundaryNorm(
-            [-1.5, 0.5, 1.5, 101],
+            # free  |wall|table|robot
+            #    0  |  1  | 9 | 99      
+            [-1.5, 0.5, 1.5, 10, 101],
             self.cmap.N
         )
 
