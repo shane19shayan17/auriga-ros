@@ -3,6 +3,7 @@
 #include "interface/srv/food_ready.hpp"
 #include "std_srvs/srv/empty.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "interface/srv/order.hpp"
 
 #include <memory>
 #include <string>
@@ -13,12 +14,13 @@
 #include "../include/kitchen/Menu.hpp"
 
 using Odometry = nav_msgs::msg::Odometry;
+using Order = interface::srv::Order;
 
 class KithcenHandler
 {
 public:
-    KithcenHandler(int period_ms)
-        : period_second_(period_ms / 1000.0)
+    KithcenHandler(int period_ms, rclcpp::Logger logger_)
+        : period_second_(period_ms / 1000.0), logger(logger_)
     {
         kitchen_odom_.header.frame_id = "baase_link";
         kitchen_odom_.pose.pose.position.x = 0;
@@ -38,6 +40,7 @@ public:
         Food food;
         bool is_ready;
         float remaining_time;
+        std::pair<int, int> table_pose;
     };
 
     enum State
@@ -46,7 +49,6 @@ public:
         COMMING_BACK = 2,
         DELIVERING = 3,
     };
-    
 
     void run()
     {
@@ -61,17 +63,14 @@ public:
             o.remaining_time -= period_second_;
         }
 
-        if (robot_state_ == State::FREE)
+        for (size_t i = 0; i < orders.size(); i++)
         {
-            for (size_t i = 0; i < orders.size(); i++)
+            if (orders.at(i).is_ready)
             {
-                if (orders.at(i).is_ready)
-                {
-                    has_ready_food = true;
-                    ready_food_info = orders.at(i);
-                    orders.erase(orders.begin() + i);
-                    break;
-                }
+                has_ready_food = true;
+                ready_food_info = orders.at(i);
+                orders.erase(orders.begin() + i);
+                break;
             }
         }
 
@@ -91,25 +90,22 @@ public:
         return robot_state_;
     }
 
-    bool get_order(std::string name)
+    bool handle_new_order(Order::Request::SharedPtr order)
     {
-        for (size_t i = 0; i < menu.size(); i++)
+        for (const Food &m : menu)
         {
-            auto m = menu.at(i);
-            if (m.name == name && m.remaining > 0)
+            if (m.name == order->name)
             {
-                LOG_INFO("kitchen", "%s added to kitchen's que !", m.name.c_str());
-                orders.push_back(menu.at(i)); // add food to orders que
-                menu.at(i).remaining--;       // one of stock was used
-                if (menu.at(i).remaining <= 0)
-                {
-                    LOG_INFO("kitchen", "we are out of %s from now!", m.name.c_str());
-                    menu.erase(menu.begin() + i);
-                }
-                return true; // response was successful
+                OrderInfo oi;
+                oi.food = m;
+                oi.is_ready = false;
+                oi.remaining_time = m.preparationTime;
+                oi.table_pose = {order->table_pose[0], order->table_pose[1]};
+                RCLCPP_INFO(logger, "new order received !");
+                RCLCPP_INFO(logger, "food -> %s, table -> (%d, %d)", oi.food.name.c_str(), oi.table_pose.first, oi.table_pose.second);
+                return true;
             }
         }
-        LOG_INFO("kitchen", "sory robot we can not provide this order !!!");
         return false;
     }
 
@@ -145,6 +141,7 @@ private:
     bool is_close = false;
 
     Odometry kitchen_odom_ = Odometry();
+    rclcpp::Logger logger;
 };
 
 using std::placeholders::_1;
@@ -180,6 +177,10 @@ public:
         kitchen_position_publisher_ = this->create_publisher<Odometry>(
             "/kitchen_position",
             keep_last_qos);
+
+        receive_order_service_ = this->create_service<Order>(
+            "customer_order",
+            std::bind(&KitchenNode::receive_order_callback, this, _1, _2));
 
         kitchen_position_publisher_->publish(kithcenHandler.get_kitchen_odometry());
     }
@@ -234,15 +235,23 @@ private:
         kithcenHandler.set_robot_state(msg->robot_state);
     }
 
+    void receive_order_callback(
+        const Order::Request::SharedPtr request,
+        Order::Response::SharedPtr response)
+    {
+        response->success = kithcenHandler.handle_new_order(request);
+    }
+
     rclcpp::Subscription<Robot>::SharedPtr robot_state_subscriber_;
     rclcpp::Client<FoodReady>::SharedPtr food_ready_client_;
     rclcpp::Client<Empty>::SharedPtr closing_client_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Publisher<Odometry>::SharedPtr kitchen_position_publisher_;
+    rclcpp::Service<Order>::SharedPtr receive_order_service_;
     int timer_period_ms = 200;
 
     // main controller for kitchen
-    KithcenHandler kithcenHandler{timer_period_ms};
+    KithcenHandler kithcenHandler{timer_period_ms, get_logger()};
 };
 
 int main(int argc, char *argv[])

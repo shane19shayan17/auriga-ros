@@ -17,6 +17,7 @@ class State(Enum):
     COMMING_BACK = 2,
     DELIVERING = 3,
     ORDERING = 4,
+    NAVIGATING = 5,
 
 
 @dataclass
@@ -24,7 +25,6 @@ class Duty:
     duty_type: State = State.FREE
     succeed: bool = False
     table_pose: tuple = (0, 0)
-    
 
 
 class Robothandler():
@@ -42,7 +42,7 @@ class Robothandler():
         self.robot_state: State = State.COMMING_BACK
         
         self.robot_path_: list[tuple] = []
-        self.duties_: deque[list] = deque()
+        self.duties_: deque[Duty] = deque()
     
     def set_kitchen_odom(self, position : Odometry):
         self.kitchen_odom = position
@@ -55,9 +55,6 @@ class Robothandler():
     
     def get_robot_state(self) -> int:
         return self.robot_state.value[0]
-    
-    def handle_robot_state(self) -> None:
-        pass
     
     def get_robot_state(self) -> State:
         return self.robot_state
@@ -73,7 +70,7 @@ class Robothandler():
         
         # check the path is generated
         if self.robot_path_ == []:
-            self.logger.info(f'path was not generated !')
+            self.logger.debug(f'path was not generated !')
             return
         
         self.robot_odom.pose.pose.position.x = self.robot_path_[0][0]
@@ -82,7 +79,6 @@ class Robothandler():
         self.robot_path_.pop(0)
     
     def handle_new_order(self, order: Order.Request) -> bool:
-        self.logger.info(f'len -> {len(self.duties_)}')
         try:
             duty = Duty(State.ORDERING, False, (order.table_pose[0], order.table_pose[1]))
             self.duties_.append(duty)
@@ -91,9 +87,28 @@ class Robothandler():
             self.logger.warn(f'order did not accept !\n{e}')
             return False
     
+    def handle_food_received(self, ):
+        pass
+    
     # main function of robot. this function call every loop of ros timer
     def run(self) -> None:
-        pass
+        # check if duty is empty
+        if not self.duties_:
+            self.logger.info('robot is free and has no duty')
+            self.robot_state = State.FREE
+            return
+        
+        duty = self.duties_[0]
+        if duty.duty_type == State.ORDERING:
+            # compute path to pose
+            goal_pose = duty.table_pose
+            self.logger.info(f'goal ->({goal_pose[0]}, {goal_pose[1]})')
+            # change state to navigating
+        elif duty.duty_type == State.NAVIGATING:
+            # control robot to acheive to goal
+            pass
+
+
 class RobotNode(Node):
 
     def __init__(self):
@@ -156,6 +171,12 @@ class RobotNode(Node):
             callback=self.order_callback
         )
         
+        # client for send order to kitchen
+        self.send_order_client_ = self.create_client(
+            Order,
+            "customer_order"
+        )
+        self.send_order_to_kitchen()
         self.get_logger().info(f'Robot node started !')
 
     def timer_callback(self):
@@ -208,6 +229,11 @@ class RobotNode(Node):
     def order_callback(self, request: Order.Request, response: Order.Response):
         response.success = self.robotHandler.handle_new_order(request)
         return response
+    
+    def send_order_to_kitchen(self):
+        while not self.send_order_client_.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('Waiting for the kitchen server ...')
+
 
 def main(args=None):
     rclpy.init(args=args)
