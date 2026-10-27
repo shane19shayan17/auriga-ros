@@ -82,7 +82,7 @@ public:
     int table = rand() % tables_pose_.size();
     order.table_pose = {tables_pose_.at(table).first, tables_pose_.at(table).second};
 
-    RCLCPP_INFO(get_logger(), "table (%d, %d) want to order !", order.table_pose[0], order.table_pose[1]);
+    RCLCPP_INFO(get_logger(), "table (%d, %d)  order %s", order.table_pose[0], order.table_pose[1], order.name.c_str());
 
     return order;
   }

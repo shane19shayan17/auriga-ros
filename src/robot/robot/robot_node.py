@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 
 from interface.msg import Robot
-from interface.srv import FoodReady
+from interface.srv import FoodReady, Order
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
 from rclpy.impl.rcutils_logger import RcutilsLogger
 
@@ -10,12 +10,22 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 from enum import Enum
 from collections import deque
+from dataclasses import dataclass
 
 class State(Enum):
     FREE = 1,
     COMMING_BACK = 2,
     DELIVERING = 3,
     ORDERING = 4,
+
+
+@dataclass
+class Duty:
+    duty_type: State = State.FREE
+    succeed: bool = False
+    table_pose: tuple = (0, 0)
+    
+
 
 class Robothandler():
     def __init__(self, logger: RcutilsLogger):
@@ -71,6 +81,15 @@ class Robothandler():
         self.logger.info(f'robot moved to ({self.robot_path_[0][0]}, {self.robot_path_[0][1]})')
         self.robot_path_.pop(0)
     
+    def handle_new_order(self, order: Order.Request) -> bool:
+        self.logger.info(f'len -> {len(self.duties_)}')
+        try:
+            duty = Duty(State.ORDERING, False, (order.table_pose[0], order.table_pose[1]))
+            self.duties_.append(duty)
+            return True
+        except Exception as e:
+            self.logger.warn(f'order did not accept !\n{e}')
+            return False
 class RobotNode(Node):
 
     def __init__(self):
@@ -127,11 +146,18 @@ class RobotNode(Node):
         self.grid_ = []
         self.robotHandler = Robothandler(self.get_logger())
         
+        # order service to give order from customer
+        self.order_service_ = self.create_service(
+            Order,
+            "order",
+            callback=self.order_callback
+        )
+        
         self.get_logger().info(f'Robot node started !')
 
     def timer_callback(self):
         msg = Robot()
-        msg.robot_state = self.robotHandler.get_robot_state()
+        msg.robot_state = self.robotHandler.get_robot_state().value[0]
         self.robot_state_publisher.publish(msg)
         
         self.robotHandler.navigate()
@@ -161,7 +187,7 @@ class RobotNode(Node):
     
     def print_grid(self, grid : list):
         self.get_logger().info(f'{grid}')
-
+    
     def path_callback(self, msg: Path):
         path_lenght = len(msg.poses)
         
@@ -173,6 +199,10 @@ class RobotNode(Node):
         for pose in msg.poses:
             path.append((pose.pose.position.x, pose.pose.position.y))
         self.robotHandler.set_robot_path(path)
+    
+    def order_callback(self, request: Order.Request, response: Order.Response):
+        response.success = self.robotHandler.handle_new_order(request)
+        return response
 
 def main(args=None):
     rclpy.init(args=args)

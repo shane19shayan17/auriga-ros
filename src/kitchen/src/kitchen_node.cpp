@@ -1,6 +1,5 @@
 #include "rclcpp/rclcpp.hpp"
 #include "interface/msg/robot.hpp"
-#include "interface/srv/order.hpp"
 #include "interface/srv/food_ready.hpp"
 #include "std_srvs/srv/empty.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -151,7 +150,6 @@ private:
 using std::placeholders::_1;
 using std::placeholders::_2;
 using Robot = interface::msg::Robot;
-using Order = interface::srv::Order;
 using FoodReady = interface::srv::FoodReady;
 using Empty = std_srvs::srv::Empty;
 
@@ -166,11 +164,6 @@ public:
             "robot_state",
             10,
             std::bind(&KitchenNode::robot_state_callback, this, _1));
-
-        // order service
-        order_service_ = this->create_service<Order>(
-            "order",
-            std::bind(&KitchenNode::order_Service_callback, this, _1, _2));
 
         // timer
         timer_ = this->create_wall_timer(
@@ -241,14 +234,7 @@ private:
         kithcenHandler.set_robot_state(msg->robot_state);
     }
 
-    void order_Service_callback(const std::shared_ptr<Order::Request> request,
-                                std::shared_ptr<Order::Response> response)
-    {
-        response->success = kithcenHandler.get_order(request->name);
-    }
-
     rclcpp::Subscription<Robot>::SharedPtr robot_state_subscriber_;
-    rclcpp::Service<Order>::SharedPtr order_service_;
     rclcpp::Client<FoodReady>::SharedPtr food_ready_client_;
     rclcpp::Client<Empty>::SharedPtr closing_client_;
     rclcpp::TimerBase::SharedPtr timer_;
