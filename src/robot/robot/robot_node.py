@@ -90,6 +90,10 @@ class Robothandler():
         except Exception as e:
             self.logger.warn(f'order did not accept !\n{e}')
             return False
+    
+    # main function of robot. this function call every loop of ros timer
+    def run(self) -> None:
+        pass
 class RobotNode(Node):
 
     def __init__(self):
@@ -121,7 +125,6 @@ class RobotNode(Node):
             keep_last_qos
         )
         
-        self.odom_ = Odometry()
         self.odometry_publisher_ = self.create_publisher(
             Odometry,
             "/robot_pose",
@@ -135,7 +138,7 @@ class RobotNode(Node):
             keep_last_qos,
         )
         
-        # recieve path that navFn generated
+        # receive path that navFn generated
         self.path_subscriber_ = self.create_subscription(
             Path,
             "/plan",
@@ -156,14 +159,16 @@ class RobotNode(Node):
         self.get_logger().info(f'Robot node started !')
 
     def timer_callback(self):
+        self.robotHandler.run()
+        
         msg = Robot()
         msg.robot_state = self.robotHandler.get_robot_state().value[0]
         self.robot_state_publisher.publish(msg)
         
         self.robotHandler.navigate()
         
-        self.odom_ = self.robotHandler.get_robot_odom()
-        self.odometry_publisher_.publish(self.odom_)
+        odom = self.robotHandler.get_robot_odom()
+        self.odometry_publisher_.publish(odom)
     
     def kitchen_position_callback(self, msg : Odometry):
         self.robotHandler.set_kitchen_odom(msg)
@@ -178,15 +183,15 @@ class RobotNode(Node):
         width = grid_map.info.width
         height = grid_map.info.height
         
-        self.grid_ = [[-1] * width for _ in range(height)]
+        grid = [[-1] * width for _ in range(height)]
         
         for y in range(height):
             for x in range(width):
-                self.grid_[y][x] = grid_map.data[y * width + x]
-        self.print_grid(self.grid_)
+                grid[y][x] = grid_map.data[y * width + x]
+        self.print_grid(grid)
     
     def print_grid(self, grid : list):
-        self.get_logger().info(f'{grid}')
+        self.get_logger().debug(f'{grid}')
     
     def path_callback(self, msg: Path):
         path_lenght = len(msg.poses)
