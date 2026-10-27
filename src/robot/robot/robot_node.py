@@ -4,7 +4,10 @@ from rclpy.node import Node
 from interface.msg import Robot
 from interface.srv import FoodReady, Order
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
+
+# rclpy types
 from rclpy.impl.rcutils_logger import RcutilsLogger
+from rclpy.task import Future
 
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
@@ -176,7 +179,7 @@ class RobotNode(Node):
             Order,
             "customer_order"
         )
-        self.send_order_to_kitchen()
+        
         self.get_logger().info(f'Robot node started !')
 
     def timer_callback(self):
@@ -230,9 +233,17 @@ class RobotNode(Node):
         response.success = self.robotHandler.handle_new_order(request)
         return response
     
-    def send_order_to_kitchen(self):
+    def send_order_to_kitchen(self, order: Order.Request):
         while not self.send_order_client_.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Waiting for the kitchen server ...')
+        
+        future: Future = self.send_order_client_.call_async(order)
+        future.add_done_callback(self.send_food_done_callback)
+        
+    
+    def send_food_done_callback(self, future: Future):
+        response = future.result()
+        pass
 
 
 def main(args=None):
