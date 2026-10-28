@@ -92,7 +92,7 @@ public:
 
     bool handle_new_order(Order::Request::SharedPtr order)
     {
-        for (const Food &m : menu)
+        for (Food &m : menu)
         {
             if (m.name == order->name)
             {
@@ -101,8 +101,16 @@ public:
                 oi.is_ready = false;
                 oi.remaining_time = m.preparationTime;
                 oi.table_pose = {order->table_pose[0], order->table_pose[1]};
+
+                if (m.remaining < 1)
+                {
+                    RCLCPP_INFO(logger, "out of stock for this food !");
+                    return false;
+                }
+                m.remaining--;
+
                 RCLCPP_INFO(logger, "new order received !");
-                RCLCPP_INFO(logger, "food -> %s, table -> (%d, %d)", oi.food.name.c_str(), oi.table_pose.first, oi.table_pose.second);
+                RCLCPP_INFO(logger, "food -> %s, table -> (%d, %d), remaining -> %d", oi.food.name.c_str(), oi.table_pose.first, oi.table_pose.second, m.remaining);
                 return true;
             }
         }

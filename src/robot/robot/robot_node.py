@@ -15,6 +15,13 @@ from enum import Enum
 from collections import deque
 from dataclasses import dataclass
 
+# action client 
+from rclpy.action import ActionClient
+from action_msgs.msg import GoalStatus
+from nav2_msgs.action import ComputePathToPose
+from geometry_msgs.msg import PoseStamped
+import math
+
 class State(Enum):
     FREE = 1,
     COMMING_BACK = 2,
@@ -31,7 +38,7 @@ class Duty:
 
 
 class Robothandler():
-    def __init__(self, logger: RcutilsLogger):
+    def __init__(self, logger: RcutilsLogger, compute_path_function = None):
         self.kitchen_odom = Odometry()
         
         # initial state of robot
@@ -46,6 +53,8 @@ class Robothandler():
         
         self.robot_path_: list[tuple] = []
         self.duties_: deque[Duty] = deque()
+        
+        self.computePath = compute_path_function
     
     def set_kitchen_odom(self, position : Odometry):
         self.kitchen_odom = position
@@ -164,9 +173,7 @@ class RobotNode(Node):
             10
         )
         
-        self.grid_ = []
-        self.robotHandler = Robothandler(self.get_logger())
-        
+        self.grid_ = []        
         # order service to give order from customer
         self.order_service_ = self.create_service(
             Order,
@@ -180,6 +187,14 @@ class RobotNode(Node):
             "customer_order"
         )
         
+        # action client to ask the nav2 planner for a path
+        self.compute_path_client_ = ActionClient(
+            self,
+            ComputePathToPose,
+            'compute_path_to_pose'
+        )
+        
+        self.robotHandler = Robothandler(self.get_logger(), self.computePath)
         self.get_logger().info(f'Robot node started !')
 
     def timer_callback(self):
@@ -221,7 +236,7 @@ class RobotNode(Node):
         path_lenght = len(msg.poses)
         
         # check wheaher the line is empty
-        if path_lenght < 0:
+        if path_lenght <= 0:
             return
         
         path: list[tuple] = []
@@ -239,10 +254,38 @@ class RobotNode(Node):
         
         future: Future = self.send_order_client_.call_async(order)
         future.add_done_callback(self.send_food_done_callback)
-        
     
     def send_food_done_callback(self, future: Future):
-        response = future.result()
+        pass
+    
+    def make_pose_stamped(self, x: float, y: float, yaw: float = 0.0) -> PoseStamped:
+        pose = PoseStamped()
+        pose.header.frame_id = 'map'
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.pose.position.x = float(x)
+        pose.pose.position.y = float(y)
+        pose.pose.orientation.z = math.sin(yaw / 2.0)
+        pose.pose.orientation.w = math.cos(yaw / 2.0)
+        return pose
+    
+    def computePath(self, goal: tuple, start: tuple, yaw: float = 0.0) -> bool:
+        """Ask the planner for a path from the robot's current pose to (x, y)."""
+        if not self.compute_path_client_.server_is_ready():
+            self.get_logger().warn('planner action server is not ready')
+            return False
+
+        goal_msg = ComputePathToPose.Goal()
+        goal_msg.goal = self.make_pose_stamped(goal[0], goal[1], yaw)
+        goal_msg.start = self.make_pose_stamped(start[0], start[1], yaw)
+
+        goal_msg.use_start = True
+        goal_msg.planner_id = 'GridBased'
+
+        self.get_logger().info(f'requesting path to ({goal[0]}, {goal[1]})')
+        future = self.compute_path_client_.send_goal_async(goal_msg)
+        future.add_done_callback(self.compute_path_response_callback)
+        return True
+    def compute_path_response_callback(self, future):
         pass
 
 
