@@ -3,14 +3,7 @@ from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from interface.msg import Matrix2D, Pose2D
-import numpy as np
-from enum import Enum
 
-class MapContext(Enum):
-    FREE_SPACE = 0,
-    WALL = 1,
-    TABLE = 9,
-    ROBOT = 99,
 
 class MapLoaderNode(Node):
 
@@ -40,6 +33,20 @@ class MapLoaderNode(Node):
             qos_setting
         )
         
+        self.table_poses: list[tuple] = [
+            (2, 2),
+            (0, 3),
+            (9, 2),
+            (7, 3),
+            (11, 9),
+            (0, 9),
+            (0, 7),
+            (0, 5),
+            (0, 11),
+            (0, 13),
+            (0, 15),
+            (0, 17),
+        ]
         
         if(self.publishMapOnce()):
             self.get_logger().info(f'map loaded successfuly !')
@@ -64,20 +71,17 @@ class MapLoaderNode(Node):
             self.get_logger().error(f"Cannot open '{self.map_path}'")
             return False
         
-        rows = []
+        data = []
         for line in raw_lines:
             line = line.rstrip('\r\n ')
-            if line:
-                rows.append(line)
-        
-        # means some data missed !
-        if len(rows) != self.height_:
-            self.get_logger().error(f'Expected {self.height_} rows, got {len(rows)}')
-            return False
-
-        data = ''.join(rows)
-        data = list(map(int, data)) # convert all string to int
-
+            str_num: str = ''
+            for word in line:
+                if word != ' ':
+                    str_num += word
+                else :
+                    data.append(int(str_num))
+                    str_num = ''
+            data.append(int(str_num))
         map_.data = data
 
         self.map_publisher_.publish(map_)
@@ -85,13 +89,11 @@ class MapLoaderNode(Node):
         # publish tables pose
         tables_pose = Matrix2D()
         
-        for i in range(len(rows)):
-            for j in range(len(rows[i])):
-                if int(rows[i][j]) == MapContext.TABLE.value[0]:
-                    pose = Pose2D()
-                    pose.x = i
-                    pose.y = j
-                    tables_pose.poses.append(pose)
+        for pose in self.table_poses:
+            p = Pose2D()
+            p.x = pose[0]
+            p.y = pose[1]
+            tables_pose.poses.append(p)
         
         tables_pose.rows = len(tables_pose.poses)
         self.tables_pose_publisher_.publish(tables_pose)

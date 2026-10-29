@@ -5,6 +5,13 @@ from launch_ros.actions import Node
 def generate_launch_description():
     params = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'navfn_params.yaml')
     
+    mapLoader = Node(
+            package='map_loader',
+            executable='map_loader',
+            name='map_loader',
+            output='screen',
+    )
+    
     planner = Node(
         package='nav2_planner',
         executable='planner_server',
@@ -24,5 +31,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         planner,
-        lifecycle
+        lifecycle,
+        mapLoader,
     ])

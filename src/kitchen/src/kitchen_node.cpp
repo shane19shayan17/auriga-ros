@@ -23,8 +23,8 @@ public:
         : period_second_(period_ms / 1000.0), logger(logger_)
     {
         kitchen_odom_.header.frame_id = "baase_link";
-        kitchen_odom_.pose.pose.position.x = 0;
-        kitchen_odom_.pose.pose.position.y = 0;
+        kitchen_odom_.pose.pose.position.x = 0.0;
+        kitchen_odom_.pose.pose.position.y = 0.0;
         kitchen_odom_.pose.pose.orientation.w = 1;
     }
 

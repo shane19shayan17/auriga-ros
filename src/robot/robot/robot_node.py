@@ -19,7 +19,8 @@ from dataclasses import dataclass
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
 from nav2_msgs.action import ComputePathToPose
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
+from tf2_ros import TransformBroadcaster
 import math
 
 class State(Enum):
@@ -43,8 +44,8 @@ class Robothandler():
         
         # initial state of robot
         self.robot_odom = Odometry()
-        self.robot_odom.pose.pose.position.x = 2.0
-        self.robot_odom.pose.pose.position.y = 2.0
+        self.robot_odom.pose.pose.position.x = 0.0
+        self.robot_odom.pose.pose.position.y = 0.0
         self.robot_odom.pose.pose.orientation.w = 1.0
         
         self.logger = logger
@@ -112,13 +113,14 @@ class Robothandler():
         
         duty = self.duties_[0]
         if duty.duty_type == State.ORDERING:
-            # compute path to pose
             goal_pose = duty.table_pose
-            self.logger.info(f'goal ->({goal_pose[0]}, {goal_pose[1]})')
-            # change state to navigating
+            start_pose: tuple = (self.robot_odom.pose.pose.position.x, self.robot_odom.pose.pose.position.y) 
+            if self.computePath((goal_pose), (start_pose)):
+                duty.duty_type = State.NAVIGATING
+
         elif duty.duty_type == State.NAVIGATING:
+            self.logger.info(f'path {len(self.robot_path_)}')
             # control robot to acheive to goal
-            pass
 
 
 class RobotNode(Node):
@@ -194,20 +196,23 @@ class RobotNode(Node):
             'compute_path_to_pose'
         )
         
+        self.tf_broadcaster_ = TransformBroadcaster(self)
+        
         self.robotHandler = Robothandler(self.get_logger(), self.computePath)
         self.get_logger().info(f'Robot node started !')
 
     def timer_callback(self):
         self.robotHandler.run()
         
+        odom = self.robotHandler.get_robot_odom()
+        self.odometry_publisher_.publish(odom)
+        self.publish_tf(odom)
+        
         msg = Robot()
         msg.robot_state = self.robotHandler.get_robot_state().value[0]
         self.robot_state_publisher.publish(msg)
         
         self.robotHandler.navigate()
-        
-        odom = self.robotHandler.get_robot_odom()
-        self.odometry_publisher_.publish(odom)
     
     def kitchen_position_callback(self, msg : Odometry):
         self.robotHandler.set_kitchen_odom(msg)
@@ -258,6 +263,19 @@ class RobotNode(Node):
     def send_food_done_callback(self, future: Future):
         pass
     
+    def publish_tf(self, robot_odom: Odometry):
+        pose = robot_odom.pose.pose
+
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'map'
+        t.child_frame_id = 'base_link'
+        t.transform.translation.x = pose.position.x
+        t.transform.translation.y = pose.position.y
+        t.transform.translation.z = 0.0
+        t.transform.rotation = pose.orientation
+        self.tf_broadcaster_.sendTransform(t)
+
     def make_pose_stamped(self, x: float, y: float, yaw: float = 0.0) -> PoseStamped:
         pose = PoseStamped()
         pose.header.frame_id = 'map'
