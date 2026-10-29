@@ -36,11 +36,11 @@ class MapVisualizer(Node):
                     10
                 )
         
-        self.cmap = ListedColormap(['#ffffff', "#691e89", "#d60e9e", "#1325ce"])
+        self.cmap = ListedColormap(["#575555", "#fdfdfd", "#0e2cd6", "#b33c15"])
         self.norm = BoundaryNorm(
-            # free  |wall|table|robot
-            #    0  |  1  | 9 | 99      
-            [-1.5, 0.5, 1.5, 10, 101],
+            # unknown |free| - |wall| robot
+            #    -1  |  0  | 50 | 100, 150     
+            [-1.5, -0.1, 1.5, 101, 151],
             self.cmap.N
         )
 
@@ -80,7 +80,7 @@ class MapVisualizer(Node):
         robot_x = int(np.round(robot_x))
         robot_y = int(np.round(robot_y))
         
-        self.map_[robot_x, robot_y] = 99 # simple number for robot
+        self.map_[robot_x, robot_y] = 50 # simple number for robot
 
     def map_callback(self, msg: OccupancyGrid):
         # Read map dimensions
