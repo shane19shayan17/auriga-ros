@@ -14,8 +14,8 @@ class MapVisualizer(Node):
         super().__init__('map_visualizer')
 
         self.map_ = None
-        self.width_ = 20
-        self.height_ = 20
+        self.width_ = 22
+        self.height_ = 22
 
         keep_last_qos = QoSProfile(
             depth=1,

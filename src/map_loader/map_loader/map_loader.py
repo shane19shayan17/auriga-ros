@@ -13,8 +13,8 @@ class MapLoaderNode(Node):
         self.map_path = '/home/shayo/coding/auriga-ros/src/map_loader/map_loader/map.txt'
         self.frame_id_ = 'map'
         self.resolution_ = 1.0
-        self.height_ = 20
-        self.width_ = 20
+        self.height_ = 22
+        self.width_ = 22
         
         qos_setting = QoSProfile(
             depth=1,
